@@ -27,6 +27,8 @@ from sleekxmpp.xmlstream.handler import *
 
 
 log = logging.getLogger(__name__)
+DEFAULT_NS = 'jabber:client'
+
 
 # In order to make sure that Unicode is handled properly
 # in Python 2.x, reset the default encoding.
@@ -36,7 +38,6 @@ if sys.version_info < (3, 0):
 
 
 class BaseXMPP(XMLStream):
-
     """
     The BaseXMPP class adapts the generic XMLStream class for use
     with XMPP. It also provides a plugin mechanism to easily extend
@@ -77,8 +78,7 @@ class BaseXMPP(XMLStream):
        send_presence           -- Create and send a Presence stanza.
        send_presence_subscribe -- Send a subscription request.
     """
-
-    def __init__(self, default_ns='jabber:client'):
+    def __init__(self, default_ns=DEFAULT_NS):
         """
         Adapt an XML stream for use with XMPP.
 
