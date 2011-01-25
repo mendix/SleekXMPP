@@ -240,7 +240,7 @@ class xep_0030(base.base_plugin):
             log.debug("Info result from %s" % iq['from'])
             self.xmpp.event('disco_info', iq)
 
-    def handle_disco_info(self, iq, forwarded=False):
+    def handle_disco_info(self, iq, forwarded=True):
         """
         A default handler for disco#info requests. If another
         handler is registered, this one will defer and not run.
