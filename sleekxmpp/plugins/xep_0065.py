@@ -23,6 +23,7 @@ from .. xmlstream.stanzabase import ElementBase, ET, JID
 from .. stanza.iq import Iq
 
 STREAM_CLOSED_EVENT = 'BYTE_STREAM_CLOSED'
+log = logging.getLogger(__name__)
 
 def sendAckIQ(xmpp, to, id):
     iq = xmpp.makeIqResult(id=id)
@@ -169,7 +170,7 @@ class xep_0065(xep_0096.FileTransferProtocol):
           jid = jid_key
 
       if host is not None and port is not None and jid is not None:
-        logging.debug("found host %s and port %s" % (host, port))
+        log.debug("found host %s and port %s" % (host, port))
         byte_stream_session = ByteStreamSession(self.xmpp, sid, requester_jid, target_jid, 150392)
         byte_stream_session.open_socket(host, port)
         self._socket_connected_ack(iq, jid)
@@ -196,14 +197,14 @@ class ByteStreamSession(threading.Thread):
       self.file_length = file_length
         
     def run(self):
-      logging.debug("running...")
+      log.debug("running...")
       self.receive_file()
 
     def open_socket(self, host, port):
       port = int(port)
       self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       self.clientsocket.connect((host, port))
-      logging.debug("socket connected at %s:%s" % (host, port))
+      log.debug("socket connected at %s:%s" % (host, port))
 
     def receive_file(self):
       self.clientsocket.send(self.socks5hello)
@@ -222,14 +223,14 @@ class ByteStreamSession(threading.Thread):
 
           outputfile.write(chunk)
       except socket.error, msg:
-        logging.error("something went horribly wrong %s" % msg)
+        log.error("something went horribly wrong %s" % msg)
 
 
       outputfile.flush()
       outputfile.close()
 
       self.clientsocket.close()
-      logging.debug("file saved!")
+      log.debug("file saved!")
 
 '''
 stanza objects

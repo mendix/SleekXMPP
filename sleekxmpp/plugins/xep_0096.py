@@ -19,6 +19,8 @@ PROTOCOL_SI_XMLNS            = 'http://jabber.org/protocol/si'
 PROTOCOL_SI_PROFILE_FT_XMLNS = 'http://jabber.org/protocol/si/profile/file-transfer'
 PROTOCOL_FEATURENEG_XMLNS    = 'http://jabber.org/protocol/feature-neg'
 
+log = logging.getLogger(__name__)
+
 def generateSid():
     sid = ''
     for i in range(7):
@@ -235,7 +237,7 @@ class xep_0096(base.base_plugin):
         Handles the negotiation of an incoming file transfer request.  
         
         '''
-        logging.debug("incoming file transfer request: %s" %tostring(xml))
+        log.debug("incoming file transfer request: %s" %tostring(xml))
         
         xferInfo = parseRequestXMLToDict(xml)
         returnIQ = None
@@ -249,7 +251,7 @@ class xep_0096(base.base_plugin):
             
         #Check if the program is accepting transfers
         if self.acceptTransferRequest(xferInfo, xml) == False and returnIQ is None:
-            logging.debug('rejecting transfer')
+            log.debug('rejecting transfer')
             returnIQ = makeRejectStreamIQ(self.xmpp.makeIqError(xml.get('id')), xml.get('to'))
         
         #check that the requested protocol is a feature available for use
@@ -260,7 +262,7 @@ class xep_0096(base.base_plugin):
             
         #None of the error conditions is true, we can accept the transfer
         if returnIQ is None:
-            logging.debug('transfer accepted, for sid: %s' %xferInfo['sid'])
+            log.debug('transfer accepted, for sid: %s' %xferInfo['sid'])
             #get the full filename and save path
             self.activeBytestreams[xferInfo['sid']] = xferInfo
             filenameAndPath = self.saveDirectory + self.saveNamePrefix + xferInfo['filename']
@@ -304,7 +306,7 @@ class xep_0096(base.base_plugin):
         using only this protocol namespace (assuming that the protocol is registered 
         as a feature for this plugin)
         '''
-        logging.debug('sending file...')
+        log.debug('sending file...')
         #verify the file exists
         if not os.path.isfile(fileName):
             raise IOError('file: %s not found' %fileName)
@@ -330,7 +332,7 @@ class xep_0096(base.base_plugin):
                                fileHash=md5.hexdigest())
         result = iq.send(block=True, timeout=10)
         if result.get('type') == 'error': 
-            logging.debug('session rejected')
+            log.debug('session rejected')
             raise Exception('Session rejected: %s' %result)
             '''
             if result.find('*/{urn:ietf:params:xml:ns:xmpp-stanzas}service-unavailable') != None:
