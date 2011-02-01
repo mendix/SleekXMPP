@@ -78,6 +78,9 @@ class FileTransferProtocol(base.base_plugin):
         fileFinishedSending(self, sid):
             fires an event that signals that a file has finished receiving.  The
             fired event comes with a dict that contains the sid of the bytestream.
+
+        start_receive_file(self, file_name, file_length, sid):
+          stores filestream info in a dictionary for later retrieval by the implementing protocol. Contains a dict: {name: .., length: ..}
         
     There are also 2 events that users of this plugin can register to receive notifications:
     FILE_FINISHED_SENDING     - This event is fired after a file send has completed
@@ -126,7 +129,9 @@ class FileTransferProtocol(base.base_plugin):
     
     def fileFinishedSending(self, sid):
         self.xmpp.event(FileTransferProtocol.FILE_FINISHED_SENDING, {'sid': sid})        
-    
+
+    def start_receive_file(self, file_name, file_length, sid):
+      pass
     
 class xep_0096(base.base_plugin):
     '''
@@ -277,6 +282,7 @@ class xep_0096(base.base_plugin):
             else:  
                 protocolNS = matchingProtocols.pop()
             xferInfo['selectedProtocol'] = self.bytestreamProtocols[protocolNS]['protocol']
+            self.bytestreamProtocols[protocolNS]['protocol'].start_receive_file(xferInfo['filename'], xferInfo['filesize'], xferInfo['sid'])
             
             returnIQ = makeAcceptResultIQ(self.xmpp.makeIqResult(xml.get('id')), xml.get('from'), protocolNS)
                         

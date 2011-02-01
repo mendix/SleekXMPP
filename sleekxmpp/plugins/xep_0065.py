@@ -48,19 +48,12 @@ class xep_0065(xep_0096.FileTransferProtocol):
     def plugin_init(self):
         self.xep = '0065'
         self.description = 'Socks5 Bytestreams'
+        self.incoming_files = {}
+
         self.acceptTransfers = self.config.get('acceptTransfers', True)
         self.saveDirectory = self.config.get('saveDirectory', '/tmp/')
-        self.saveNamePrefix = self.config.get('saveNamePrefix', 'xep_0065_')
-        self.overwriteFile = self.config.get('overwriteFile', True)
-        self.stanzaType = self.config.get('stanzaType', 'iq') #Currently only IQ is supported
         self.maxSessions = self.config.get('maxSessions', 2)
         self.transferTimeout = self.config.get('transferTimeout', 120) #how long we should wait between data messages until we consider the stream invalid
-        self.maxBlockSize = self.config.get('maxBlockSize', 8192)
-        self.prefBlockSize = self.config.get('prefBlockSize', 4096)
-        #callbacks
-        self.acceptTransferCallback = self.config.get('acceptTransferCallback')
-        self.fileNameCallback = self.config.get('fileNameCallback')
-        
         #thread setup
         self.streamSessions = {} #id:thread
         self.__streamSetupLock = threading.Lock()
@@ -143,6 +136,10 @@ class xep_0065(xep_0096.FileTransferProtocol):
         '''
         self.acceptTransfers = status
 
+    def start_receive_file(self, file_name, file_length, sid):
+      self.incoming_files[sid] = {"name" : file_name, "length" : file_length}
+      log.debug("got a file! %s "% file_name)
+
     def _handle_incoming_transfer_request(self, iq):
       print("handling incoming request")
         
@@ -171,12 +168,13 @@ class xep_0065(xep_0096.FileTransferProtocol):
 
       if host is not None and port is not None and jid is not None:
         log.debug("found host %s and port %s" % (host, port))
-        byte_stream_session = ByteStreamSession(self.xmpp, sid, requester_jid, target_jid, 150392)
+        file_size = int(self.incoming_files[sid]['length'])
+        byte_stream_session = ByteStreamSession(self.xmpp, sid, requester_jid, target_jid, file_size)
         byte_stream_session.open_socket(host, port)
         self._socket_connected_ack(iq, jid)
         byte_stream_session.start()
       else:
-        print("host or port not found?")
+        log.error("Tried to connect to %s:%s, but failed" % (host, port))
 
     def _socket_connected_ack(self, request_iq, jid):
         query = ET.Element('{%s}query' % xep_0065.XMLNS)
