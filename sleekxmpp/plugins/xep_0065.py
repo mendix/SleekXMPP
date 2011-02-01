@@ -4,22 +4,18 @@ license to be announced, some type of opensource though
 """
 
 from __future__ import division, with_statement, unicode_literals
-import os, sys
+import sys
+import struct
 import logging
 import threading
-import time
-import base64
 import xep_0096
-import uuid
 import socket
 from hashlib import sha1
 from .. basexmpp import DEFAULT_NS
 from .. xmlstream.matcher.xpath import MatchXPath
-from .. xmlstream.matcher.xmlmask import MatchXMLMask
-from .. xmlstream.matcher.id import MatcherId
 from .. xmlstream.handler.callback import Callback
 from sleekxmpp.xmlstream import register_stanza_plugin
-from .. xmlstream.stanzabase import ElementBase, ET, JID
+from .. xmlstream.stanzabase import ElementBase, ET
 from .. stanza.iq import Iq
 
 STREAM_CLOSED_EVENT = 'BYTE_STREAM_CLOSED'
@@ -152,7 +148,6 @@ class xep_0065(xep_0096.FileTransferProtocol):
       print("event close stream")
         
     def _handle_socket_negotiation(self, iq):
-      id = iq['id']
       sid = iq['streamhosts']['sid']
       host = None
       port = None
@@ -189,8 +184,10 @@ class ByteStreamSession(threading.Thread):
     def __init__(self, xmpp, sid, requester_jid, target_jid,  file_length):
       threading.Thread.__init__(self, name='bytestream_session_%s' % sid )
 
-      digest = sha1(sid + str(requester_jid) + str(target_jid)).digest()
-      self.socks5hello = b'5103' + digest + b'00'
+      digest = sha1("%s%s%s" % (sid, requester_jid, target_jid)).hexdigest()
+      digest2 = '!BBBBB%dsBB' % len(digest)
+      self.socks5hello = struct.pack(str(digest2), 0x05, 0x01, 0x00, 0x03, len(digest), digest, 0, 0)
+      
 
       self.file_length = file_length
         
