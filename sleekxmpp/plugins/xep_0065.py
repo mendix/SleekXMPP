@@ -255,7 +255,7 @@ class ByteStreamSession(threading.Thread):
       relay_request = struct.pack(str(digest), 0x05, 0x01, 0x00, 0x03, len(self.address_digest), str(self.address_digest), 0, 0)
       self.file_socket.write(relay_request)
       self.file_socket.flush()
-      log.debug("send socks auth methods")
+      log.debug("Sent socks auth methods")
 
     def _send_socks_auth_methods_request(self):
       socks_authentication_methods = struct.pack(str('!BBB'), 0x05, 0x01, 0x00)
@@ -275,7 +275,7 @@ class ByteStreamSession(threading.Thread):
       header = struct.unpack(str('!BBBBB'), self.file_socket.read(5))
       digest_length = header[-1]
 
-      digest = self.file_socket.read(digest_length)
+      self.file_socket.read(digest_length)
       self.file_socket.read(2) # 2 more for port
         
 '''
