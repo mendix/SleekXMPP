@@ -184,10 +184,7 @@ class ByteStreamSession(threading.Thread):
     def __init__(self, xmpp, sid, requester_jid, target_jid,  file_length):
       threading.Thread.__init__(self, name='bytestream_session_%s' % sid )
 
-      digest = sha1("%s%s%s" % (sid, requester_jid, target_jid)).hexdigest()
-      digest2 = '!BBBBB%dsBB' % len(digest)
-      self.socks5hello = struct.pack(str(digest2), 0x05, 0x01, 0x00, 0x03, len(digest), digest, 0, 0)
-      
+      self.address_digest = sha1("%s%s%s" % (sid, requester_jid, target_jid)).hexdigest()
 
       self.file_length = file_length
         
@@ -198,11 +195,19 @@ class ByteStreamSession(threading.Thread):
     def open_socket(self, host, port):
       port = int(port)
       self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      
       self.clientsocket.connect((host, port))
+      self.file_socket = self.clientsocket.makefile()
+
+      self._send_socks_auth_methods_request()
+      self._read_socks_auth_methods_response()
+
+      self._send_socks_relay_request()
+      self._read_socks_relay_response()
+
       log.debug("socket connected at %s:%s" % (host, port))
 
     def receive_file(self):
-      self.clientsocket.send(self.socks5hello)
       destination = "/tmp/botje.jpg"
       outputfile = open(destination, "wb")
       
@@ -227,6 +232,35 @@ class ByteStreamSession(threading.Thread):
       self.clientsocket.close()
       log.debug("file saved!")
 
+    def _send_socks_relay_request(self):
+      digest = '!BBBBB%dsBB' % len(self.address_digest)
+
+      relay_request = struct.pack(str(digest), 0x05, 0x01, 0x00, 0x03, len(self.address_digest), str(self.address_digest), 0, 0)
+      self.file_socket.write(relay_request)
+      self.file_socket.flush()
+      log.debug("send socks auth methods")
+
+    def _send_socks_auth_methods_request(self):
+      socks_authentication_methods = struct.pack(str('!BBB'), 0x05, 0x01, 0x00)
+      self.file_socket.write(socks_authentication_methods)
+      self.file_socket.flush()
+
+    def _read_socks_auth_methods_response(self):
+      header = self.file_socket.read(2)
+      log.debug("Received socks authentication negotiation")
+      unpacked = struct.unpack(str('!BB'), header)
+
+      if unpacked[0] != 0x05 or unpacked[1] != 0x00:
+        log.error("Socks negotiation failed")
+        raise RuntimeError("Socks authentication negotiation failed")
+      
+    def _read_socks_relay_response(self):
+      header = struct.unpack(str('!BBBBB'), self.file_socket.read(5))
+      digest_length = header[-1]
+
+      digest = self.file_socket.read(digest_length)
+      self.file_socket.read(2) # 2 more for port
+        
 '''
 stanza objects
 '''
