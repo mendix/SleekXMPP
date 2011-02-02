@@ -134,7 +134,7 @@ class xep_0065(xep_0096.FileTransferProtocol):
 
     def start_receive_file(self, file_name, file_length, sid):
       self.incoming_files[sid] = {"name" : file_name, "length" : file_length}
-      log.debug("got a file! %s "% file_name)
+      log.debug("A file was announced to me: %s " % file_name)
 
     def _handle_incoming_transfer_request(self, iq):
       print("handling incoming request")
@@ -155,21 +155,26 @@ class xep_0065(xep_0096.FileTransferProtocol):
       requester_jid = iq['from']
       target_jid = iq['to']
 
-      for (jid_key, s) in iq['streamhosts']['hosts'].iteritems():
-        if s['host'].startswith('10.140'):
-          host = s['host']
-          port = s['port']
-          jid = jid_key
+      file_size = int(self.incoming_files[sid]['length'])
+      byte_stream_session = ByteStreamSession(self.xmpp, sid, requester_jid, target_jid, file_size)
 
-      if host is not None and port is not None and jid is not None:
-        log.debug("found host %s and port %s" % (host, port))
-        file_size = int(self.incoming_files[sid]['length'])
-        byte_stream_session = ByteStreamSession(self.xmpp, sid, requester_jid, target_jid, file_size)
-        byte_stream_session.open_socket(host, port)
+      for (jid_key, s) in iq['streamhosts']['hosts'].iteritems():
+        print("Available streamhost: %s:%s" % (s['host'], s['port']))
+        host = s['host']
+        port = s['port']
+        jid = jid_key
+        try:
+          byte_stream_session.open_socket(host, port)
+          break
+        except Exception:
+          pass
+
+      if byte_stream_session.connected:
         self._socket_connected_ack(iq, jid)
         byte_stream_session.start()
       else:
-        log.error("Tried to connect to %s:%s, but failed" % (host, port))
+        log.error("Couldn't open socket for filetransfer %s" % sid)
+        self._socket_connected_nack(iq, jid)
 
     def _socket_connected_ack(self, request_iq, jid):
         query = ET.Element('{%s}query' % xep_0065.XMLNS)
@@ -179,6 +184,13 @@ class xep_0065(xep_0096.FileTransferProtocol):
         request_iq.reply().set_payload(query)
         request_iq.send()
         
+    def _socket_connected_nack(self, request_iq, jid):
+        error = ET.Element('error', type='cancel')
+        ET.SubElement(error, '{urn:ietf:params:xml:ns:xmpp-stanzas}remote-server-not-found')
+        
+        request_iq.reply().set_payload(error)
+        request_iq.send()
+
 class ByteStreamSession(threading.Thread):
     
     def __init__(self, xmpp, sid, requester_jid, target_jid,  file_length):
@@ -187,14 +199,18 @@ class ByteStreamSession(threading.Thread):
       self.address_digest = sha1("%s%s%s" % (sid, requester_jid, target_jid)).hexdigest()
 
       self.file_length = file_length
+      self.connected = False
+      log.debug("Initialized bytestreamsession")
         
     def run(self):
       log.debug("running...")
       self.receive_file()
 
     def open_socket(self, host, port):
+      log.debug("Going to try and open a socket at %s:%s" % (host, port))
       port = int(port)
       self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      self.clientsocket.settimeout(5.0)
       
       self.clientsocket.connect((host, port))
       self.file_socket = self.clientsocket.makefile()
@@ -204,6 +220,7 @@ class ByteStreamSession(threading.Thread):
 
       self._send_socks_relay_request()
       self._read_socks_relay_response()
+      self.connected = True
 
       log.debug("socket connected at %s:%s" % (host, port))
 
