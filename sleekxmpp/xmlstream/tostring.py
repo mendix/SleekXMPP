@@ -112,12 +112,10 @@ def xml_escape(text):
         if type(text) != types.UnicodeType:
             text = unicode(text, 'utf-8', 'ignore')
 
-    text = list(text)
-    escapes = {'&': '&amp;',
-               '<': '&lt;',
-               '>': '&gt;',
-               "'": '&apos;',
-               '"': '&quot;'}
-    for i, c in enumerate(text):
-        text[i] = escapes.get(c, c)
-    return ''.join(text)
+    escapes = ['&', '<', '>', "'", '"']
+    for key in escapes:
+        if key in text:
+            escaped_text = map(lambda x : "<![CDATA[%s]]>" % x, text.split("]]>"))
+            return "<![CDATA[]]]><![CDATA[]>]]>".join(escaped_text)
+
+    return text
