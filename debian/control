@@ -1,0 +1,22 @@
+Source: sleekxmpp
+Section: python
+Priority: optional
+Maintainer: Pim van den Berg <pim.van.den.berg@mendix.com>
+Build-Depends: devscripts,
+ python (>= 2.6.5),
+ debhelper,
+ dh-buildinfo
+Standards-Version: 3.9.2
+Homepage: https://github.com/fritzy/SleekXMPP/wiki
+Vcs-Git: https://github.com/fritzy/SleekXMPP.git
+Vcs-Browser: https://github.com/fritzy/SleekXMPP
+
+Package: python-sleekxmpp
+Architecture: all
+Depends: ${python:Depends}, ${misc:Depends}
+Suggests: python-dnspython
+Description: Python XMPP (Jabber) Library Implementing Everything as a Plugin
+ SleekXMPP is a pet project of an XMPP enthusiast. The goals of the project are
+ ease of implementation, and complete draft XEP (XMPP Extended Protocol)
+ coverage. Ideally the community will be able to use this for bots, easy XEP
+ protocoling, etc.
