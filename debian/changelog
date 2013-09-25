@@ -1,3 +1,10 @@
+sleekxmpp (1.1.11-1~mendix1~bpo60+1) squeeze-backports; urgency=low
+
+  * Rebuild for squeeze-backports.
+  * debian/gbp.conf: set debian-branch to squeeze-backports
+
+ -- Pim van den Berg <pim.van.den.berg@mendix.com>  Wed, 25 Sep 2013 11:35:10 +0200
+
 sleekxmpp (1.1.11-1~mendix1) unstable; urgency=low
 
   * Initial packaging of 1.1.11
