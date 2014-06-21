@@ -1,9 +1,10 @@
 import time
+import threading
 
-from sleekxmpp import Message
-from sleekxmpp.test import *
-from sleekxmpp.xmlstream.handler import *
-from sleekxmpp.xmlstream.matcher import *
+import unittest
+from sleekxmpp.test import SleekTest
+from sleekxmpp.exceptions import IqTimeout
+from sleekxmpp import Callback, MatchXPath
 
 
 class TestHandlers(SleekTest):
@@ -21,7 +22,7 @@ class TestHandlers(SleekTest):
         """Test using stream callback handlers."""
 
         def callback_handler(stanza):
-            self.xmpp.sendRaw("""
+            self.xmpp.send_raw("""
               <message>
                 <body>Success!</body>
               </message>
@@ -31,7 +32,7 @@ class TestHandlers(SleekTest):
                             MatchXPath('{test}tester'),
                             callback_handler)
 
-        self.xmpp.registerHandler(callback)
+        self.xmpp.register_handler(callback)
 
         self.recv("""<tester xmlns="test" />""")
 
@@ -49,7 +50,7 @@ class TestHandlers(SleekTest):
             iq['query'] = 'test'
             reply = iq.send(block=True)
             if reply:
-                self.xmpp.sendRaw("""
+                self.xmpp.send_raw("""
                   <message>
                     <body>Successful: %s</body>
                   </message>
@@ -112,7 +113,7 @@ class TestHandlers(SleekTest):
         time.sleep(0.1)
 
         # Check that the waiter is no longer registered
-        waiter_exists = self.xmpp.removeHandler('IqWait_test2')
+        waiter_exists = self.xmpp.remove_handler('IqWait_test2')
 
         self.failUnless(waiter_exists == False,
             "Waiter handler was not removed.")
@@ -225,6 +226,58 @@ class TestHandlers(SleekTest):
             <body>Handler 3: Testing</body>
           </message>
         """)
+
+    def testWrongSender(self):
+      """
+      Test that using the wrong sender JID in a IQ result
+      doesn't trigger handlers.
+      """
+
+      events = []
+
+      def run_test():
+          # Check that Iq was sent by waiter_handler
+          iq = self.Iq()
+          iq['id'] = 'test'
+          iq['to'] = 'tester@sleekxmpp.com/test'
+          iq['type'] = 'set'
+          iq['query'] = 'test'
+          result = iq.send()
+          events.append(result['from'].full)
+
+      t = threading.Thread(name="sender_test", target=run_test)
+      t.start()
+
+      self.recv("""
+        <iq id="test" from="evil@sleekxmpp.com/bad" type="result">
+          <query xmlns="test" />
+        </iq>
+      """)
+      self.recv("""
+        <iq id="test" from="evil2@sleekxmpp.com" type="result">
+          <query xmlns="test" />
+        </iq>
+      """)
+      self.recv("""
+        <iq id="test" from="evil.com" type="result">
+          <query xmlns="test" />
+        </iq>
+      """)
+
+      # Now for a good one
+      self.recv("""
+        <iq id="test" from="tester@sleekxmpp.com/test" type="result">
+          <query xmlns="test" />
+        </iq>
+      """)
+
+      t.join()
+
+      time.sleep(0.1)
+
+      self.assertEqual(events, ['tester@sleekxmpp.com/test'], "Did not timeout on bad sender")
+
+
 
 
 suite = unittest.TestLoader().loadTestsFromTestCase(TestHandlers)

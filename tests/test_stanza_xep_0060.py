@@ -1,6 +1,8 @@
-from sleekxmpp.test import *
+import unittest
+from sleekxmpp.test import SleekTest
 import sleekxmpp.plugins.xep_0004 as xep_0004
 import sleekxmpp.plugins.xep_0060.stanza as pubsub
+from sleekxmpp.xmlstream.stanzabase import ET
 
 
 class TestPubsubStanzas(SleekTest):
@@ -128,20 +130,6 @@ class TestPubsubStanzas(SleekTest):
                 </configure>
               </pubsub>
             </iq>""")
-
-    def testState(self):
-        "Testing iq/psstate stanzas"
-        iq = self.Iq()
-        iq['psstate']['node']= 'mynode'
-        iq['psstate']['item']= 'myitem'
-        pl = ET.Element('{http://andyet.net/protocol/pubsubqueue}claimed')
-        iq['psstate']['payload'] = pl
-        self.check(iq, """
-          <iq id="0">
-            <state xmlns="http://jabber.org/protocol/psstate" node="mynode" item="myitem">
-              <claimed xmlns="http://andyet.net/protocol/pubsubqueue" />
-            </state>
-          </iq>""")
 
     def testDefault(self):
         "Testing iq/pubsub_owner/default stanzas"

@@ -6,7 +6,6 @@
     See the file LICENSE for copying permission.
 """
 
-import sys
 import ssl
 import logging
 
@@ -44,14 +43,15 @@ class FeatureMechanisms(BasePlugin):
     }
 
     def plugin_init(self):
-        if not self.use_mech and not self.xmpp.requested_jid.user:
-            self.use_mech = 'ANONYMOUS'
-
         if self.sasl_callback is None:
             self.sasl_callback = self._default_credentials
 
         if self.security_callback is None:
             self.security_callback = self._default_security
+
+        creds = self.sasl_callback(set(['username']), set())
+        if not self.use_mech and not creds['username']:
+            self.use_mech = 'ANONYMOUS'
 
         self.mech = None
         self.mech_list = set()
@@ -92,27 +92,26 @@ class FeatureMechanisms(BasePlugin):
         values = required_values.union(optional_values)
         for value in values:
             if value == 'username':
-                result[value] = self.xmpp.requested_jid.user
-            elif value == 'password':
-                result[value] = creds['password']
-            elif value == 'authzid':
-                result[value] = creds.get('authzid', '')
+                result[value] = creds.get('username', self.xmpp.requested_jid.user)
             elif value == 'email':
                 jid = self.xmpp.requested_jid.bare
                 result[value] = creds.get('email', jid)
             elif value == 'channel_binding':
-                if sys.version_info >= (3, 3):
+                if hasattr(self.xmpp.socket, 'get_channel_binding'):
                     result[value] = self.xmpp.socket.get_channel_binding()
                 else:
+                    log.debug("Channel binding not supported.")
+                    log.debug("Use Python 3.3+ for channel binding and " + \
+                              "SCRAM-SHA-1-PLUS support")
                     result[value] = None
             elif value == 'host':
-                result[value] = self.xmpp.requested_jid.domain
+                result[value] = creds.get('host', self.xmpp.requested_jid.domain)
             elif value == 'realm':
-                result[value] = self.xmpp.requested_jid.domain
+                result[value] = creds.get('realm', self.xmpp.requested_jid.domain)
             elif value == 'service-name':
-                result[value] = self.xmpp._service_name
+                result[value] = creds.get('service-name', self.xmpp._service_name)
             elif value == 'service':
-                result[value] = 'xmpp'
+                result[value] = creds.get('service', 'xmpp')
             elif value in creds:
                 result[value] = creds[value]
         return result
@@ -174,8 +173,12 @@ class FeatureMechanisms(BasePlugin):
         except sasl.SASLNoAppropriateMechanism:
             log.error("No appropriate login method.")
             self.xmpp.event("no_auth", direct=True)
+            self.xmpp.event("failed_auth", direct=True)
             self.attempted_mechs = set()
             return self.xmpp.disconnect()
+        except StringPrepError:
+            log.exception("A credential value did not pass SASLprep.")
+            self.xmpp.disconnect()
 
         resp = stanza.Auth(self.xmpp)
         resp['mechanism'] = self.mech.name
@@ -191,9 +194,6 @@ class FeatureMechanisms(BasePlugin):
             log.error("Mutual authentication failed! " + \
                       "A security breach is possible.")
             self.attempted_mechs.add(self.mech.name)
-            self.xmpp.disconnect()
-        except StringPrepError:
-            log.exception("A credential value did not pass SASLprep.")
             self.xmpp.disconnect()
         else:
             resp.send(now=True)
@@ -215,6 +215,8 @@ class FeatureMechanisms(BasePlugin):
             self.attempted_mechs.add(self.mech.name)
             self.xmpp.disconnect()
         else:
+            if resp.get_value() == '':
+                resp.del_value()
             resp.send(now=True)
 
     def _handle_success(self, stanza):

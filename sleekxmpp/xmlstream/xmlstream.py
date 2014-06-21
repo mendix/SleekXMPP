@@ -26,11 +26,12 @@ import time
 import random
 import weakref
 import uuid
+import errno
 
 from xml.parsers.expat import ExpatError
 
 import sleekxmpp
-from sleekxmpp.util import Queue, QueueEmpty
+from sleekxmpp.util import Queue, QueueEmpty, safedict
 from sleekxmpp.thirdparty.statemachine import StateMachine
 from sleekxmpp.xmlstream import Scheduler, tostring, cert
 from sleekxmpp.xmlstream.stanzabase import StanzaBase, ET, ElementBase
@@ -49,7 +50,7 @@ RESPONSE_TIMEOUT = 30
 
 #: The time in seconds to wait for events from the event queue, and also the
 #: time between checks for the process stop signal.
-WAIT_TIMEOUT = 0.1
+WAIT_TIMEOUT = 1.0
 
 #: The number of threads to use to handle XML stream events. This is not the
 #: same as the number of custom event handling threads.
@@ -121,6 +122,11 @@ class XMLStream(object):
         #:     import ssl
         #:     xmpp.ssl_version = ssl.PROTOCOL_SSLv23
         self.ssl_version = ssl.PROTOCOL_TLSv1
+
+        #: The list of accepted ciphers, in OpenSSL Format.
+        #: It might be useful to override it for improved security
+        #: over the python defaults.
+        self.ciphers = None
 
         #: Path to a file containing certificates for verifying the
         #: server SSL certificate. A non-``None`` value will trigger
@@ -217,6 +223,11 @@ class XMLStream(object):
 
         #: If set to ``True``, attempt to use IPv6.
         self.use_ipv6 = True
+
+        #: If set to ``True``, allow using the ``dnspython`` DNS library
+        #: if available. If set to ``False``, the builtin DNS resolver
+        #: will be used, even if ``dnspython`` is installed.
+        self.use_dnspython = True
 
         #: Use CDATA for escaping instead of XML entities. Defaults
         #: to ``False``.
@@ -461,10 +472,10 @@ class XMLStream(object):
                     time.sleep(0.1)
                     elapsed += 0.1
             except KeyboardInterrupt:
-                self.stop.set()
+                self.set_stop()
                 return False
             except SystemExit:
-                self.stop.set()
+                self.set_stop()
                 return False
 
         if self.default_domain:
@@ -507,12 +518,18 @@ class XMLStream(object):
             else:
                 cert_policy = ssl.CERT_REQUIRED
 
-            ssl_socket = ssl.wrap_socket(self.socket,
-                                         certfile=self.certfile,
-                                         keyfile=self.keyfile,
-                                         ca_certs=self.ca_certs,
-                                         cert_reqs=cert_policy,
-                                         do_handshake_on_connect=False)
+            ssl_args = safedict({
+                'certfile': self.certfile,
+                'keyfile': self.keyfile,
+                'ca_certs': self.ca_certs,
+                'cert_reqs': cert_policy,
+                'do_handshake_on_connect': False
+            })
+
+            if sys.version_info >= (2, 7):
+                ssl_args['ciphers'] = self.ciphers
+
+            ssl_socket = ssl.wrap_socket(self.socket, **ssl_args)
 
             if hasattr(self.socket, 'socket'):
                 # We are using a testing socket, so preserve the top
@@ -550,7 +567,7 @@ class XMLStream(object):
                         cert.verify(self._expected_server_name, self._der_cert)
                     except cert.CertificateError as err:
                         if not self.event_handled('ssl_invalid_cert'):
-                            log.error(err.message)
+                            log.error(err)
                             self.disconnect(send_close=False)
                         else:
                             self.event('ssl_invalid_cert',
@@ -559,8 +576,7 @@ class XMLStream(object):
 
             self.set_socket(self.socket, ignore=True)
             #this event is where you should set your application state
-            self.event("connected", direct=True)
-            self.reconnect_delay = 1.0
+            self.event('connected', direct=True)
             return True
         except (Socket.error, ssl.SSLError) as serr:
             error_msg = "Could not connect to %s:%s. Socket Error #%s: %s"
@@ -600,7 +616,7 @@ class XMLStream(object):
         headers = '\r\n'.join(headers) + '\r\n\r\n'
 
         try:
-            log.debug("Connecting to proxy: %s:%s", address)
+            log.debug("Connecting to proxy: %s:%s", *address)
             self.socket.connect(address)
             self.send_raw(headers, now=True)
             resp = ''
@@ -611,6 +627,7 @@ class XMLStream(object):
             lines = resp.split('\r\n')
             if '200' not in lines[0]:
                 self.event('proxy_error', resp)
+                self.event('connection_failed', direct=True)
                 log.error('Proxy Error: %s', lines[0])
                 return False
 
@@ -706,7 +723,7 @@ class XMLStream(object):
             self.stream_end_event.set()
 
         if not self.auto_reconnect:
-            self.stop.set()
+            self.set_stop()
             if self._disconnect_wait_for_threads:
                 self._wait_for_threads()
 
@@ -718,12 +735,12 @@ class XMLStream(object):
             self.event('socket_error', serr, direct=True)
         finally:
             #clear your application state
-            self.event("disconnected", direct=True)
+            self.event('disconnected', direct=True)
             return True
 
     def abort(self):
         self.session_started_event.clear()
-        self.stop.set()
+        self.set_stop()
         if self._disconnect_wait_for_threads:
             self._wait_for_threads()
         try:
@@ -818,19 +835,25 @@ class XMLStream(object):
         to be restarted.
         """
         log.info("Negotiating TLS")
-        log.info("Using SSL version: %s", str(self.ssl_version))
+        ssl_versions = {3: 'TLS 1.0', 1: 'SSL 3', 2: 'SSL 2/3'}
+        log.info("Using SSL version: %s", ssl_versions[self.ssl_version])
         if self.ca_certs is None:
             cert_policy = ssl.CERT_NONE
         else:
             cert_policy = ssl.CERT_REQUIRED
 
-        ssl_socket = ssl.wrap_socket(self.socket,
-                                     certfile=self.certfile,
-                                     keyfile=self.keyfile,
-                                     ssl_version=self.ssl_version,
-                                     do_handshake_on_connect=False,
-                                     ca_certs=self.ca_certs,
-                                     cert_reqs=cert_policy)
+        ssl_args = safedict({
+            'certfile': self.certfile,
+            'keyfile': self.keyfile,
+            'ca_certs': self.ca_certs,
+            'cert_reqs': cert_policy,
+            'do_handshake_on_connect': False
+        })
+
+        if sys.version_info >= (2, 7):
+            ssl_args['ciphers'] = self.ciphers
+
+        ssl_socket = ssl.wrap_socket(self.socket, **ssl_args);
 
         if hasattr(self.socket, 'socket'):
             # We are using a testing socket, so preserve the top
@@ -859,7 +882,7 @@ class XMLStream(object):
             cert.verify(self._expected_server_name, self._der_cert)
         except cert.CertificateError as err:
             if not self.event_handled('ssl_invalid_cert'):
-                log.error(err.message)
+                log.error(err)
                 self.disconnect(self.auto_reconnect, send_close=False)
             else:
                 self.event('ssl_invalid_cert', pem_cert, direct=True)
@@ -1016,9 +1039,13 @@ class XMLStream(object):
         # and handler classes here.
 
         if name is None:
-            name = 'add_handler_%s' % self.getNewId()
-        self.registerHandler(XMLCallback(name, MatchXMLMask(mask), pointer,
-                                         once=disposable, instream=instream))
+            name = 'add_handler_%s' % self.new_id()
+        self.register_handler(
+                XMLCallback(name,
+                    MatchXMLMask(mask, self.default_ns),
+                    pointer,
+                    once=disposable,
+                    instream=instream))
 
     def register_handler(self, handler, before=None, after=None):
         """Add a stream event handler that will be executed when a matching
@@ -1059,7 +1086,8 @@ class XMLStream(object):
 
         return resolve(domain, port, service=self.dns_service,
                                      resolver=resolver,
-                                     use_ipv6=self.use_ipv6)
+                                     use_ipv6=self.use_ipv6,
+                                     use_dnspython=self.use_dnspython)
 
     def pick_dns_answer(self, domain, port=None):
         """Pick a server and port from DNS answers.
@@ -1131,6 +1159,8 @@ class XMLStream(object):
                        event queue. All event handlers will run in the
                        same thread.
         """
+        log.debug("Event triggered: " + name)
+
         handlers = self.__event_handlers.get(name, [])
         for handler in handlers:
             #TODO:  Data should not be copied, but should be read only,
@@ -1288,6 +1318,9 @@ class XMLStream(object):
                         try:
                             sent += self.socket.send(data[sent:])
                             count += 1
+                        except Socket.error as serr:
+                            if serr.errno != errno.EINTR:
+                                raise
                         except ssl.SSLError as serr:
                             if tries >= self.ssl_retry_max:
                                 log.debug('SSL error: max retries reached')
@@ -1316,12 +1349,12 @@ class XMLStream(object):
         return True
 
     def _start_thread(self, name, target, track=True):
-        self.__active_threads.add(name)
         self.__thread[name] = threading.Thread(name=name, target=target)
         self.__thread[name].daemon = self._use_daemons
         self.__thread[name].start()
 
         if track:
+            self.__active_threads.add(name)
             with self.__thread_cond:
                 self.__thread_count += 1
 
@@ -1349,6 +1382,13 @@ class XMLStream(object):
 
             if self.__thread_count == 0:
                 self.__thread_cond.notify()
+
+    def set_stop(self):
+        self.stop.set()
+
+        # Unlock queues
+        self.event_queue.put(None)
+        self.send_queue.put(None)
 
     def _wait_for_threads(self):
         with self.__thread_cond:
@@ -1493,6 +1533,10 @@ class XMLStream(object):
                     # as handshakes.
                     self.stream_end_event.clear()
                     self.start_stream_handler(root)
+
+                    # We have a successful stream connection, so reset
+                    # exponential backoff for new reconnect attempts.
+                    self.reconnect_delay = 1.0
                 depth += 1
             if event == b'end':
                 depth -= 1
@@ -1618,11 +1662,7 @@ class XMLStream(object):
         log.debug("Loading event runner")
         try:
             while not self.stop.is_set():
-                try:
-                    wait = self.wait_timeout
-                    event = self.event_queue.get(True, timeout=wait)
-                except QueueEmpty:
-                    event = None
+                event = self.event_queue.get()
                 if event is None:
                     continue
 
@@ -1638,10 +1678,10 @@ class XMLStream(object):
                         log.exception(error_msg, handler.name)
                         orig.exception(e)
                 elif etype == 'schedule':
-                    name = args[1]
+                    name = args[2]
                     try:
                         log.debug('Scheduled event: %s: %s', name, args[0])
-                        handler(*args[0])
+                        handler(*args[0], **args[1])
                     except Exception as e:
                         log.exception('Error processing scheduled task')
                         self.exception(e)
@@ -1683,14 +1723,13 @@ class XMLStream(object):
             while not self.stop.is_set():
                 while not self.stop.is_set() and \
                       not self.session_started_event.is_set():
-                    self.session_started_event.wait(timeout=0.1)
+                    self.session_started_event.wait(timeout=0.1)                            # Wait for session start
                 if self.__failed_send_stanza is not None:
                     data = self.__failed_send_stanza
                     self.__failed_send_stanza = None
                 else:
-                    try:
-                        data = self.send_queue.get(True, 1)
-                    except QueueEmpty:
+                    data = self.send_queue.get()                                            # Wait for data to send
+                    if data is None:
                         continue
                 log.debug("SEND: %s", data)
                 enc_data = data.encode('utf-8')
@@ -1705,6 +1744,9 @@ class XMLStream(object):
                             try:
                                 sent += self.socket.send(enc_data[sent:])
                                 count += 1
+                            except Socket.error as serr:
+                                if serr.errno != errno.EINTR:
+                                    raise
                             except ssl.SSLError as serr:
                                 if tries >= self.ssl_retry_max:
                                     log.debug('SSL error: max retries reached')

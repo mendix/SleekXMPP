@@ -10,12 +10,9 @@ import hashlib
 import logging
 import threading
 
-from sleekxmpp import JID
 from sleekxmpp.stanza import Presence
 from sleekxmpp.exceptions import XMPPError
 from sleekxmpp.xmlstream import register_stanza_plugin
-from sleekxmpp.xmlstream.matcher import StanzaPath
-from sleekxmpp.xmlstream.handler import Callback
 from sleekxmpp.plugins.base import BasePlugin
 from sleekxmpp.plugins.xep_0153 import stanza, VCardTempUpdate
 
@@ -78,8 +75,17 @@ class XEP_0153(BasePlugin):
         self.xmpp.roster[jid].send_last_presence()
 
     def _start(self, event):
-        vcard = self.xmpp['xep_0054'].get_vcard()
-        self._allow_advertising.set()
+        try:
+            vcard = self.xmpp['xep_0054'].get_vcard(self.xmpp.boundjid.bare)
+            data = vcard['vcard_temp']['PHOTO']['BINVAL']
+            if not data:
+                new_hash = ''
+            else:
+                new_hash = hashlib.sha1(data).hexdigest()
+            self.api['set_hash'](self.xmpp.boundjid, args=new_hash)
+            self._allow_advertising.set()
+        except XMPPError:
+            log.debug('Could not retrieve vCard for %s' % self.xmpp.boundjid.bare)
 
     def _end(self, event):
         self._allow_advertising.clear()
@@ -118,6 +124,13 @@ class XEP_0153(BasePlugin):
             log.debug('Could not retrieve vCard for %s' % jid)
 
     def _recv_presence(self, pres):
+        try:
+            if pres['muc']['affiliation']:
+                # Don't process vCard avatars for MUC occupants
+                # since they all share the same bare JID.
+                return
+        except: pass    
+
         if not pres.match('presence/vcard_temp_update'):
             self.api['set_hash'](pres['from'], args=None)
             return
@@ -125,7 +138,7 @@ class XEP_0153(BasePlugin):
         data = pres['vcard_temp_update']['photo']
         if data is None:
             return
-        elif data == '' or data != self.api['get_hash'](pres['to']):
+        elif data == '' or data != self.api['get_hash'](pres['from']):
             ifrom = pres['to'] if self.xmpp.is_component else None
             self.api['reset_hash'](pres['from'], ifrom=ifrom)
             self.xmpp.event('vcard_avatar_update', pres)

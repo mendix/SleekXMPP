@@ -1,8 +1,7 @@
-import sys
-import time
 import threading
 
-from sleekxmpp.test import *
+import unittest
+from sleekxmpp.test import SleekTest
 from sleekxmpp.stanza.atom import AtomEntry
 from sleekxmpp.xmlstream import register_stanza_plugin
 
@@ -431,7 +430,7 @@ class TestStreamPubsub(SleekTest):
               </publish>
             </pubsub>
           </iq>
-        """)
+        """, use_values=False)
 
     def testPublishSingleOptions(self):
         """Test publishing a single item, with options."""

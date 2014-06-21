@@ -9,7 +9,9 @@
 
     Part of SleekXMPP: The Sleek XMPP Library
 
-    :copyright: (c) 2012 Nathanael C. Fritz, Lance J.T. Stout
+    :copryight: (c) 2004-2013 David Alan Cridland
+    :copyright: (c) 2013 Nathanael C. Fritz, Lance J.T. Stout
+
     :license: MIT, see LICENSE for more details
 """
 
@@ -21,7 +23,8 @@ from base64 import b64encode, b64decode
 
 from sleekxmpp.util import bytes, hash, XOR, quote, num_to_bytes
 from sleekxmpp.util.sasl.client import sasl_mech, Mech, \
-                                       SASLCancelled, SASLFailed
+                                       SASLCancelled, SASLFailed, \
+                                       SASLMutualAuthFailed
 
 
 @sasl_mech(0)
@@ -86,7 +89,7 @@ class EXTERNAL(Mech):
         return self.credentials['authzid']
 
 
-@sasl_mech(30)
+@sasl_mech(31)
 class X_FACEBOOK_PLATFORM(Mech):
 
     name = 'X-FACEBOOK-PLATFORM'
@@ -108,7 +111,7 @@ class X_FACEBOOK_PLATFORM(Mech):
                 b'api_key': self.credentials['api_key']
             }
 
-            resp = '&'.join(['%s=%s' % (k, v) for k, v in resp_data.items()])
+            resp = '&'.join(['%s=%s' % (k.decode("utf-8"), v.decode("utf-8")) for k, v in resp_data.items()])
             return bytes(resp)
         return b''
 
@@ -284,7 +287,9 @@ class SCRAM(Mech):
         if nonce[:len(self.cnonce)] != self.cnonce:
             raise SASLCancelled('Invalid nonce')
 
-        cbind_data = self.credentials['channel_binding']
+        cbind_data = b''
+        if self.use_channel_binding:
+            cbind_data = self.credentials['channel_binding']
         cbind_input = self.gs2_header + cbind_data
         channel_binding = b'c=' + b64encode(cbind_input).replace(b'\n', b'')
 
@@ -467,7 +472,8 @@ class DIGEST(Mech):
             'qop': self.qop,
             'digest-uri': quote(self.digest_uri()),
             'response': self.response(b'AUTHENTICATE'),
-            'maxbuf': self.maxbuf
+            'maxbuf': self.maxbuf,
+            'charset': 'utf-8'
         }
         resp = b''
         for key, value in data.items():
@@ -480,7 +486,7 @@ class DIGEST(Mech):
             if self.cnonce and self.nonce and self.nonce_count and self.qop:
                 self.nonce_count += 1
                 return self.respond()
-            return b''
+            return None
 
         data = self.parse(challenge)
         if 'rspauth' in data:
@@ -526,6 +532,9 @@ else:
                     result = kerberos.authGSSClientStep(self.gss, b64_challenge)
                     if result != kerberos.AUTH_GSS_CONTINUE:
                         self.step = 1
+                elif not challenge:
+                    kerberos.authGSSClientClean(self.gss)
+                    return b''
                 elif self.step == 1:
                     username = self.credentials['username']
 
@@ -535,7 +544,7 @@ else:
 
                 resp = kerberos.authGSSClientResponse(self.gss)
             except kerberos.GSSError as e:
-                raise SASLCancelled('Kerberos error: %s' % e.message)
+                raise SASLCancelled('Kerberos error: %s' % e)
             if not resp:
                 return b''
             else:

@@ -34,7 +34,8 @@ class DefaultConfig(ElementBase):
         return self['form']
 
     def set_config(self, value):
-        self['form'].values = value.values
+        del self['from']
+        self.append(value)
         return self
 
 
@@ -93,7 +94,9 @@ class OwnerRedirect(ElementBase):
 
 
 class OwnerSubscriptions(Subscriptions):
+    name = 'subscriptions'
     namespace = 'http://jabber.org/protocol/pubsub#owner'
+    plugin_attrib = name
     interfaces = set(('node',))
 
     def append(self, subscription):

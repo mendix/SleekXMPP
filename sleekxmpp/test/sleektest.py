@@ -9,16 +9,14 @@
 import unittest
 from xml.parsers.expat import ExpatError
 
-import sleekxmpp
 from sleekxmpp import ClientXMPP, ComponentXMPP
 from sleekxmpp.util import Queue
 from sleekxmpp.stanza import Message, Iq, Presence
 from sleekxmpp.test import TestSocket, TestLiveSocket
-from sleekxmpp.exceptions import XMPPError, IqTimeout, IqError
-from sleekxmpp.xmlstream import ET, register_stanza_plugin
-from sleekxmpp.xmlstream import ElementBase, StanzaBase
+from sleekxmpp.xmlstream import ET
+from sleekxmpp.xmlstream import ElementBase
 from sleekxmpp.xmlstream.tostring import tostring
-from sleekxmpp.xmlstream.matcher import StanzaPath, MatcherId
+from sleekxmpp.xmlstream.matcher import StanzaPath, MatcherId, MatchIDSender
 from sleekxmpp.xmlstream.matcher import MatchXMLMask, MatchXPath
 
 
@@ -214,6 +212,7 @@ class SleekTest(unittest.TestCase):
             matchers = {'stanzapath': StanzaPath,
                         'xpath': MatchXPath,
                         'mask': MatchXMLMask,
+                        'idsender': MatchIDSender,
                         'id': MatcherId}
             Matcher = matchers.get(method, None)
             if Matcher is None:
@@ -377,6 +376,7 @@ class SleekTest(unittest.TestCase):
         if skip:
             if socket != 'live':
                 # Mark send queue as usable
+                self.xmpp.session_bind_event.set()
                 self.xmpp.session_started_event.set()
                 # Clear startup stanzas
                 self.xmpp.socket.next_sent(timeout=1)

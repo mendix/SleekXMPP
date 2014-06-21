@@ -11,28 +11,30 @@ from sleekxmpp.plugins.base import register_plugin, load_plugin
 
 
 __all__ = [
-    # Non-standard
-    'gmail_notify',  # Gmail searching and notifications
-
     # XEPS
     'xep_0004',  # Data Forms
     'xep_0009',  # Jabber-RPC
     'xep_0012',  # Last Activity
     'xep_0013',  # Flexible Offline Message Retrieval
     'xep_0016',  # Privacy Lists
+    'xep_0020',  # Feature Negotiation
     'xep_0027',  # Current Jabber OpenPGP Usage
     'xep_0030',  # Service Discovery
     'xep_0033',  # Extended Stanza Addresses
     'xep_0045',  # Multi-User Chat (Client)
     'xep_0047',  # In-Band Bytestreams
+    'xep_0048',  # Bookmarks
     'xep_0049',  # Private XML Storage
     'xep_0050',  # Ad-hoc Commands
     'xep_0054',  # vcard-temp
     'xep_0059',  # Result Set Management
     'xep_0060',  # Pubsub (Client)
+    'xep_0065',  # SOCKS5 Bytestreams
     'xep_0066',  # Out of Band Data
+    'xep_0071',  # XHTML-IM
     'xep_0077',  # In-Band Registration
 #   'xep_0078',  # Non-SASL auth. Don't automatically load
+    'xep_0079',  # Advanced Message Processing
     'xep_0080',  # User Location
     'xep_0082',  # XMPP Date and Time Profiles
     'xep_0084',  # User Avatar
@@ -48,12 +50,14 @@ __all__ = [
     'xep_0128',  # Extended Service Discovery
     'xep_0131',  # Standard Headers and Internet Metadata
     'xep_0133',  # Service Administration
+    'xep_0152',  # Reachability Addresses
     'xep_0153',  # vCard-Based Avatars
     'xep_0163',  # Personal Eventing Protocol
     'xep_0172',  # User Nickname
     'xep_0184',  # Message Receipts
     'xep_0186',  # Invisible Command
     'xep_0191',  # Blocking Command
+    'xep_0196',  # User Gaming
     'xep_0198',  # Stream Management
     'xep_0199',  # Ping
     'xep_0202',  # Entity Time
@@ -76,4 +80,7 @@ __all__ = [
     'xep_0302',  # XMPP Compliance Suites 2012
     'xep_0308',  # Last Message Correction
     'xep_0313',  # Message Archive Management
+    'xep_0319',  # Last User Interaction in Presence
+    'xep_0323',  # IoT Systems Sensor Data
+    'xep_0325',  # IoT Systems Control
 ]

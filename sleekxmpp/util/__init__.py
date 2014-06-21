@@ -11,14 +11,26 @@
 
 
 from sleekxmpp.util.misc_ops import bytes, unicode, hashes, hash, \
-                                    num_to_bytes, bytes_to_num, quote, XOR
+                                    num_to_bytes, bytes_to_num, quote, \
+                                    XOR, safedict
 
 
 # =====================================================================
 # Standardize import of Queue class:
 
 import sys
-if 'gevent' in sys.modules:
+
+def _gevent_threads_enabled():
+    if not 'gevent' in sys.modules:
+        return False
+    try:
+        from gevent import thread as green_thread
+        thread = __import__('thread')
+        return thread.LockType is green_thread.LockType
+    except ImportError:
+        return False
+
+if _gevent_threads_enabled():
     import gevent.queue as queue
     Queue = queue.JoinableQueue
 else:

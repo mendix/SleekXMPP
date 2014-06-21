@@ -1,5 +1,9 @@
-from sleekxmpp.test import *
+# -*- encoding: utf8 -*-
+from __future__ import unicode_literals
+import unittest
+from sleekxmpp.test import SleekTest
 from sleekxmpp import JID, InvalidJID
+from sleekxmpp.jid import nodeprep
 
 
 class TestJIDClass(SleekTest):
@@ -277,6 +281,10 @@ class TestJIDClass(SleekTest):
         # according to RFC 6122, but is not according to XEP-0106.
         #self.assertRaises(InvalidJID, JID, '%s@example.com' % '\\20foo2')
         #self.assertRaises(InvalidJID, JID, '%s@example.com' % 'bar2\\20')
+
+    def testNodePrepIdemptotent(self):
+        node = 'ᴹᴵᴷᴬᴱᴸ'
+        self.assertEqual(nodeprep(node), nodeprep(nodeprep(node)))
 
 
 suite = unittest.TestLoader().loadTestsFromTestCase(TestJIDClass)

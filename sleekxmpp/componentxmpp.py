@@ -123,12 +123,6 @@ class ComponentXMPP(BaseXMPP):
         """
         if xml.tag.startswith('{jabber:client}'):
             xml.tag = xml.tag.replace('jabber:client', self.default_ns)
-
-        # The incoming_filter call is only made on top level stanza
-        # elements. So we manually continue filtering on sub-elements.
-        for sub in xml:
-            self.incoming_filter(sub)
-
         return xml
 
     def start_stream_handler(self, xml):
@@ -158,8 +152,8 @@ class ComponentXMPP(BaseXMPP):
         """
         self.session_bind_event.set()
         self.session_started_event.set()
-        self.event("session_bind", self.boundjid, direct=True)
-        self.event("session_start")
+        self.event('session_bind', self.boundjid, direct=True)
+        self.event('session_start')
 
     def _handle_probe(self, pres):
         self.roster[pres['to']][pres['from']].handle_probe(pres)
