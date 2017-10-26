@@ -1,3 +1,12 @@
+sleekxmpp (1.3.1-1+mendix1) unstable; urgency=medium
+
+  * update to sleek-1.3.1 (1.3.1 != sleek-1.3.1)
+  * debian/gbp: upstream started using different git tags
+  * debian/patches: add
+    0001-Replace-XML-invalid-characters-with-a-replacement-ch.patch
+
+ -- Pim van den Berg <pim.van.den.berg@mendix.com>  Thu, 26 Oct 2017 14:36:39 +0200
+
 sleekxmpp (1.3.1-1~mendix0) unstable; urgency=low
 
   * update to 1.3.1
