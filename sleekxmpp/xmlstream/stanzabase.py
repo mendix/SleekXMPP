@@ -18,6 +18,8 @@ import copy
 import logging
 import weakref
 from xml.etree import cElementTree as ET
+import sys
+import re
 
 from sleekxmpp.util import safedict
 from sleekxmpp.xmlstream import JID
@@ -201,6 +203,17 @@ def fix_ns(xpath, split=False, propagate_ns=True, default_ns=''):
     if split:
         return fixed
     return '/'.join(fixed)
+
+
+# http://www.w3.org/TR/REC-xml/#NT-Char
+# Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000- #x10FFFF]
+# (any Unicode character, excluding the surrogate blocks, FFFE, and FFFF)
+_char_tail = ''
+if sys.maxunicode > 0x10000:
+    _char_tail = u'%s-%s' % (unichr(0x10000), unichr(min(sys.maxunicode, 0x10FFFF)))
+_nontext_sub = re.compile(ur'[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD%s]' % _char_tail, re.U).sub
+def replace_nontext(text, replacement=u'\uFFFD'):
+    return _nontext_sub(replacement, text)
 
 
 class ElementBase(object):
@@ -989,6 +1002,8 @@ class ElementBase(object):
 
         if not text and not keep:
             return self._del_sub(name, lang=lang)
+
+        text = replace_nontext(text)
 
         path = self._fix_ns(name, split=True)
         name = path[-1]
