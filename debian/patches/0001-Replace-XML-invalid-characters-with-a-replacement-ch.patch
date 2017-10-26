@@ -1,0 +1,69 @@
+From 6494a840049e2e10699560f5274e0d80cbffaab3 Mon Sep 17 00:00:00 2001
+From: Pim van den Berg <pim.van.den.berg@mendix.com>
+Date: Thu, 26 Oct 2017 13:58:59 +0200
+Subject: [PATCH] Replace XML invalid characters with a replacement character
+
+The python xml library accepts characters that are not allowed by XML.
+See: https://bugs.python.org/issue18850
+Reference: https://www.w3.org/TR/REC-xml/#NT-Char
+
+When including those characters in the XML stream to for example
+ejabberd, you will receive errors:
+> RECV: <stream:error xmlns="http://etherx.jabber.org/streams">
+> <xml-not-well-formed xmlns="urn:ietf:params:xml:ns:xmpp-streams" />
+> </stream:error>
+
+This commit replaces all characters that are not allowed in XML by a
+replacement character (U+FFFD) in the text contents of a sub element
+(this is the most common case where this occurs).
+
+This fix is based on: https://bugs.python.org/msg95689
+
+Fixes #210
+---
+ sleekxmpp/xmlstream/stanzabase.py | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/sleekxmpp/xmlstream/stanzabase.py b/sleekxmpp/xmlstream/stanzabase.py
+index c2e0f71..96fc620 100644
+--- a/sleekxmpp/xmlstream/stanzabase.py
++++ b/sleekxmpp/xmlstream/stanzabase.py
+@@ -18,6 +18,8 @@ import copy
+ import logging
+ import weakref
+ from xml.etree import cElementTree as ET
++import sys
++import re
+ 
+ from sleekxmpp.util import safedict
+ from sleekxmpp.xmlstream import JID
+@@ -203,6 +205,17 @@ def fix_ns(xpath, split=False, propagate_ns=True, default_ns=''):
+     return '/'.join(fixed)
+ 
+ 
++# http://www.w3.org/TR/REC-xml/#NT-Char
++# Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000- #x10FFFF]
++# (any Unicode character, excluding the surrogate blocks, FFFE, and FFFF)
++_char_tail = ''
++if sys.maxunicode > 0x10000:
++    _char_tail = u'%s-%s' % (unichr(0x10000), unichr(min(sys.maxunicode, 0x10FFFF)))
++_nontext_sub = re.compile(ur'[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD%s]' % _char_tail, re.U).sub
++def replace_nontext(text, replacement=u'\uFFFD'):
++    return _nontext_sub(replacement, text)
++
++
+ class ElementBase(object):
+ 
+     """
+@@ -990,6 +1003,8 @@ class ElementBase(object):
+         if not text and not keep:
+             return self._del_sub(name, lang=lang)
+ 
++        text = replace_nontext(text)
++
+         path = self._fix_ns(name, split=True)
+         name = path[-1]
+         parent = self.xml
+-- 
+2.11.0
+
